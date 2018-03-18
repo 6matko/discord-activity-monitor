@@ -1,7 +1,7 @@
 const Discord = require('discord.js');
 const Datastore = require('nedb'),
     activityDB = new Datastore({
-        filename: '../activity.db',
+        filename: './activity.db',
         autoload: true
     });
 const bot = new Discord.Client();
