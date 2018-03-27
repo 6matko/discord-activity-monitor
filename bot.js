@@ -71,7 +71,8 @@ function getUserActivitySummary(activityList) {
         reactionsAdded: 0,
         reactionsRemoved: 0,
         reactionsSet: 0,
-        reactionsUnset: 0
+        reactionsUnset: 0,
+        totalVoiceTime: 0
     };
 
     // Walkthrough every activity and update user activity info
@@ -104,6 +105,14 @@ function getUserActivitySummary(activityList) {
         // Count reactions that were taken away
         if (activity.action === 'unset' && activity.type === 'reaction') {
             userActivityInfo.reactionsUnset++;
+        }
+        //#endregion
+
+        //#region Voice time
+        if (activity.action === 'end' && activity.type === 'voice') {
+            // Count difference between voice session start and end
+            // Add this difference to voice total time
+            userActivityInfo.totalVoiceTime += activity.lastVoiceSessionEnd - activity.lastVoiceSessionStart;
         }
         //#endregion
     }
@@ -165,7 +174,11 @@ bot.on('message', (msg) => {
                 case '!me':
                     // Search for users activity, who posted a message
                     activityDB.find({
-                        'user.userId': msg.author.id
+                        'user.userId': msg.author.id,
+                        $not: {
+                            type: 'voice',
+                            action: 'start'
+                        }
                     }, (err, activityList) => {
                         // If user does not have any activity, prompt it
                         if (!activityList) {
@@ -176,9 +189,10 @@ bot.on('message', (msg) => {
                             // // Prompt information about who we are showing data
                             msg.author.send(`Information about **${activityList[0].user.username}**`);
                             // // Convert MS to object with days, months, minutes and seconds
-                            // const totalVoiceTime = convertMS(activity.totalVoiceTime);
-                            // // Prompt total voice chat time
+                            const totalVoiceTime = convertMS(userInformation.totalVoiceTime);
+                            // Prompt total voice chat time
                             // msg.author.send(`Voice chat total time - ${totalVoiceTime.d} days, ${totalVoiceTime.h} hours, ${totalVoiceTime.m} minutes, ${totalVoiceTime.s} seconds`);
+                            msg.author.send(`Voice chat total time - ${totalVoiceTime.d} days, ${totalVoiceTime.h} hours, ${totalVoiceTime.m} minutes, ${totalVoiceTime.s} seconds`);
                             // Prompt total sent message count:
                             msg.author.send(`Messages sent: ${userInformation.messagesAdded - userInformation.messagesRemoved} (**+**${userInformation.messagesAdded} | **-**${userInformation.messagesRemoved})`);
                             msg.author.send(`Reactions added: ${userInformation.reactionsAdded - userInformation.reactionsRemoved} (**+**${userInformation.reactionsAdded} | **-**${userInformation.reactionsRemoved})`);
@@ -314,7 +328,7 @@ bot.on('voiceStateUpdate', (oldMember, newMember) => {
     const channel = bot.channels.find("name", "general");
 
     if (oldUserChannel === undefined && newUserChannel !== undefined) {
-        let newActivity = new Activity(newUserChannel.guild, newUserChannel.client.user, 'voice', 'start');
+        let newActivity = new Activity(newUserChannel.guild, newMember.user, 'start', 'voice');
         newActivity.lastVoiceSessionStart = new Date();
         activityDB.insert(newActivity, (err, doc) => {
             console.log(doc);
@@ -342,24 +356,37 @@ bot.on('voiceStateUpdate', (oldMember, newMember) => {
         // });
         // channel.send('test');
     } else if (newUserChannel === undefined) {
-        let newActivity = new Activity(oldUserChannel.guild, oldUserChannel.client.user, 'voice', 'end');
+        let newActivity = new Activity(oldUserChannel.guild, oldMember.user, 'end', 'voice');
         // Search for users activity, who left the voice channel
-        activityDB.findOne({
+        activityDB.update({
             $and: [{
-                    'user.userId': oldMember.user.id
-                },
-                {
-                    $not: {
-                        lastVoiceSessionStart: 0
-                    }
-                },
-                {
-                    lastVoiceSessionEnd: 0
+                'user.userId': oldMember.user.id,
+                action: 'start',
+                type: 'voice'
+            },
+            {
+                $not: {
+                    lastVoiceSessionStart: 0
                 }
+            },
+            {
+                lastVoiceSessionEnd: 0
+            }
             ]
-        }, (err, activity) => {
-            console.log(activity);
-        });
+        },
+            {
+                $set: {
+                    // Set end date of voice session
+                    lastVoiceSessionEnd: new Date(),
+                    // Set action as "voice end" since user ended voice session
+                    action: 'end',
+                    // Replace actions "when" date with current date because it happened just now
+                    when: new Date()
+                }
+            },
+            (err, activity) => {
+                console.log(activity);
+            });
         // // User leaves a voice channel
         // channel.send(`user ${oldMember.user.username} left a channel`);
 
