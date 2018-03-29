@@ -121,14 +121,6 @@ function getUserActivitySummary(activityList) {
     return userActivityInfo;
 }
 
-// function updateActivity(userObj) {
-//     activityDB.update({
-//         userId: userObj.userId
-//     }, userObj, {
-//         upsert: true
-//     });
-// }
-
 bot.on('ready', () => {
     console.log('bot ready');
 
@@ -149,25 +141,6 @@ bot.on('message', (msg) => {
             activityDB.insert(newActivity, (err, doc) => {
                 console.log(doc);
             });
-            // // Search for users activity, who posted a message
-            // activityDB.findOne({
-            //     userId: msg.author.id
-            // }, (err, activity) => {
-            //     let userObj;
-            //     // If we dont have no activity for current user, we will create it with initial values
-            //     if (!activity) {
-            //         userObj = new UserActivity(msg.author);
-            //     } else {
-            //         // In other case just updates values
-            //         userObj = new UserActivity(msg.author, activity);
-            //     }
-            //     // Increase sent message count
-            //     userObj.sentMessageCount++;
-            //     // Update activity
-            //     updateActivity(userObj);
-            //     // User Joins a voice channel
-            //     // channel.send(`user ${userObj.username} was updated with new message count: ${userObj.sentMessageCount}`);
-            // });
             break;
         case 'dm':
             switch (msg.content) {
@@ -204,6 +177,32 @@ bot.on('message', (msg) => {
                         }
                     });
                     break;
+                case '!test':
+                    let yesterday = new Date();
+                    let startDate = new Date();
+                    startDate.setDate(startDate.getDate() - 6);
+                    yesterday.setDate(yesterday.getDate() - 1);
+
+                    activityDB.find({
+                            'user.userId': msg.author.id,
+                            $and: [{
+                                    $not: {
+                                        type: 'voice',
+                                        action: 'start'
+                                    },
+                                },
+                                {
+                                    when: {
+                                        $gte: startDate,
+                                        $lte: yesterday
+                                    }
+                                }
+                            ]
+                        },
+                        (err, docs) => {
+                            console.log(docs);
+                        });
+                    break;
             }
             break;
         default:
@@ -217,26 +216,6 @@ bot.on('messageDelete', (msg) => {
     activityDB.insert(newActivity, (err, doc) => {
         console.log(doc);
     });
-
-    // // Search for users activity, who posted a message
-    // activityDB.findOne({
-    //     userId: msg.author.id
-    // }, (err, activity) => {
-    //     let userObj;
-    //     // If we dont have no activity for current user, we will create it with initial values
-    //     if (!activity) {
-    //         userObj = new UserActivity(msg.author);
-    //     } else {
-    //         // In other case just updates values
-    //         userObj = new UserActivity(msg.author, activity);
-    //     }
-    //     // Decrease sent message count
-    //     userObj.sentMessageCount--;
-    //     // Update activity
-    //     updateActivity(userObj);
-    //     // User Joins a voice channel
-    //     // channel.send(`user ${userObj.username} joined a channel`);
-    // });
 });
 
 bot.on('messageReactionAdd', (msgReaction, user) => {
@@ -245,45 +224,6 @@ bot.on('messageReactionAdd', (msgReaction, user) => {
     activityDB.insert([newActivity, newSecondUserActivity], (err, doc) => {
         console.log(doc);
     });
-
-
-    // // Search for users activity, who added a reaction
-    // activityDB.findOne({
-    //     userId: user.id
-    // }, (err, activity) => {
-    //     let userObj;
-    //     // If we dont have no activity for current user, we will create it with initial values
-    //     if (!activity) {
-    //         userObj = new UserActivity(user);
-    //     } else {
-    //         // In other case just updates values
-    //         userObj = new UserActivity(user, activity);
-    //     }
-    //     // Increase added reaction count to user who added reaction
-    //     userObj.setReactionCount++;
-    //     // Update activity
-    //     updateActivity(userObj);
-    //     // Search for message authors activity
-    //     activityDB.findOne({
-    //         userId: msgReaction.message.author.id
-    //     }, (err, msgAuthorActivity) => {
-    //         let authorObj;
-    //         // If we found message authors activity, then
-    //         if (msgAuthorActivity) {
-    //             // ... create activity object
-    //             authorObj = new UserActivity(msgReaction.message.author, msgAuthorActivity);
-    //             // ... and increase got reaction count
-    //             authorObj.gotReactionCount++;
-    //         } else {
-    //             // If message author does not have any activity, init new activity with got reaction count 1
-    //             authorObj = new UserActivity(msgReaction.message.author, {
-    //                 gotReactionCount: 1
-    //             });
-    //         }
-    //         // Update messege authors activity
-    //         updateActivity(authorObj);
-    //     })
-    // });
 });
 
 bot.on('messageReactionRemove', (msgReaction, user) => {
@@ -292,89 +232,50 @@ bot.on('messageReactionRemove', (msgReaction, user) => {
     activityDB.insert([newActivity, newSecondUserActivity], (err, doc) => {
         console.log(doc);
     });
-    // // Search for users activity, who removed a reaction
-    // activityDB.findOne({
-    //     userId: user.id
-    // }, (err, activity) => {
-    //     let userObj;
-    //     // If we dont have no activity for current user, we will create it with initial values
-    //     if (!activity) {
-    //         userObj = new UserActivity(user);
-    //     } else {
-    //         // In other case just updates values
-    //         userObj = new UserActivity(user, activity);
-    //     }
-    //     // Decrease added reaction count to user who removed reaction
-    //     userObj.setReactionCount--;
-    //     // Update activity
-    //     updateActivity(userObj);
-    //     // Search for message authors activity
-    //     activityDB.findOne({
-    //         userId: msgReaction.message.author.id
-    //     }, (err, msgAuthorActivity) => {
-    //         // Create authors activity object
-    //         let authorObj = new UserActivity(msgReaction.message.author, msgAuthorActivity);
-    //         // Decrease got reaction count
-    //         authorObj.gotReactionCount--;
-    //         // Update messege authors activity
-    //         updateActivity(authorObj);
-    //     })
-    // });
 });
 
 bot.on('voiceStateUpdate', (oldMember, newMember) => {
     let newUserChannel = newMember.voiceChannel;
     let oldUserChannel = oldMember.voiceChannel;
-    const channel = bot.channels.find("name", "general");
 
-    if (oldUserChannel === undefined && newUserChannel !== undefined) {
+    // Voice session start
+    if ((oldUserChannel === undefined && newUserChannel !== undefined) || (oldMember.selfMute === true && newMember.selfMute === false)) {
+        // If user is muted, dont start the session
+        if (newMember.selfMute) {
+            return;
+        }
+        // Create new activity
         let newActivity = new Activity(newUserChannel.guild, newMember.user, 'start', 'voice');
         newActivity.lastVoiceSessionStart = new Date();
         activityDB.insert(newActivity, (err, doc) => {
             console.log(doc);
         });
-        // // Search for users activity, who joined the voice channel
-        // activityDB.findOne({
-        //     'user.userId': newMember.user.id
-        // }, {
-        //     lastVoiceSessionEnd
-        // }, (err, activity) => {
-        //     let userObj;
-        //     // If we dont have no activity for current user, we will create it with initial values
-        //     if (!activity) {
-        //         userObj = new UserActivity(newMember.user);
-        //     } else {
-        //         // In other case just updates values
-        //         userObj = new UserActivity(newMember.user, activity);
-        //     }
-        //     // Set voice session start time
-        //     userObj.lastVoiceSessionStart = new Date();
-        //     // Update activity
-        //     updateActivity(userObj);
-        //     // // User Joins a voice channel
-        //     // channel.send(`user ${userObj.username} joined a channel`);
-        // });
-        // channel.send('test');
-    } else if (newUserChannel === undefined) {
+
+        // Voice session end
+    } else if (newUserChannel === undefined || (oldMember.selfMute === false && newMember.selfMute === true)) {
+        // If user is muted, dont end the session because it is wasnt even started
+        if (oldMember.selfMute && newMember.selfMute) {
+            return;
+        }
+        // Create new activity
         let newActivity = new Activity(oldUserChannel.guild, oldMember.user, 'end', 'voice');
         // Search for users activity, who left the voice channel
         activityDB.update({
-            $and: [{
-                'user.userId': oldMember.user.id,
-                action: 'start',
-                type: 'voice'
-            },
-            {
-                $not: {
-                    lastVoiceSessionStart: 0
-                }
-            },
-            {
-                lastVoiceSessionEnd: 0
-            }
-            ]
-        },
-            {
+                $and: [{
+                        'user.userId': oldMember.user.id,
+                        action: 'start',
+                        type: 'voice'
+                    },
+                    {
+                        $not: {
+                            lastVoiceSessionStart: 0
+                        }
+                    },
+                    {
+                        lastVoiceSessionEnd: 0
+                    }
+                ]
+            }, {
                 $set: {
                     // Set end date of voice session
                     lastVoiceSessionEnd: new Date(),
@@ -387,11 +288,8 @@ bot.on('voiceStateUpdate', (oldMember, newMember) => {
             (err, activity) => {
                 console.log(activity);
             });
-        // // User leaves a voice channel
-        // channel.send(`user ${oldMember.user.username} left a channel`);
-
     }
 })
 
 // Bot token
-bot.login(process.env.BOT_TOKEN || "MyToken");
+bot.login(process.env.BOT_TOKEN || 'MyToken');
